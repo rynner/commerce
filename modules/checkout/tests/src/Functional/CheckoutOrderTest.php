@@ -83,8 +83,7 @@ class CheckoutOrderTest extends CommerceBrowserTestBase {
     $this->drupalGet($this->product->toUrl()->toString());
     $this->submitForm([], 'Add to cart');
     $this->assertSession()->pageTextContains('1 item');
-    $cart_link = $this->getSession()->getPage()->findLink('your cart');
-    $cart_link->click();
+    $this->getSession()->getPage()->findLink('your cart')->click();
     $this->submitForm([], 'Checkout');
     $this->assertSession()->pageTextNotContains('Order Summary');
     $this->assertCheckoutProgressStep('Login');
@@ -134,12 +133,15 @@ class CheckoutOrderTest extends CommerceBrowserTestBase {
    * Tests than an order can go through checkout steps.
    */
   public function testGuestOrderCheckout() {
+    $config = \Drupal::configFactory()->getEditable('commerce_checkout.commerce_checkout_flow.default');
+    $config->set('configuration.display_checkout_progress_breadcrumb_links', TRUE);
+    $config->save();
+
     $this->drupalLogout();
     $this->drupalGet($this->product->toUrl()->toString());
     $this->submitForm([], 'Add to cart');
     $this->assertSession()->pageTextContains('1 item');
-    $cart_link = $this->getSession()->getPage()->findLink('your cart');
-    $cart_link->click();
+    $this->getSession()->getPage()->findLink('your cart')->click();
     $this->submitForm([], 'Checkout');
     $this->assertSession()->pageTextNotContains('Order Summary');
 
@@ -173,7 +175,15 @@ class CheckoutOrderTest extends CommerceBrowserTestBase {
     $this->submitForm([], 'Checkout');
     $this->assertCheckoutProgressStep('Login');
     $this->assertSession()->pageTextNotContains('Order Summary');
+    // Check breadcrumbs are links.
+    $this->assertSession()->elementsCount('css', '.block-commerce-checkout-progress li.checkout-progress--step > a', 0);
     $this->submitForm([], 'Continue as Guest');
+    // Check breadcrumb link functionality.
+    $this->assertSession()->elementsCount('css', '.block-commerce-checkout-progress li.checkout-progress--step > a', 1);
+    $this->getSession()->getPage()->findLink('Login')->click();
+    $this->assertSession()->pageTextNotContains('Order Summary');
+    $this->submitForm([], 'Continue as Guest');
+    $this->assertSession()->pageTextContains('Order Summary');
     $this->assertCheckoutProgressStep('Order information');
     $this->submitForm([
       'contact_information[email]' => 'guest@example.com',
@@ -189,7 +199,23 @@ class CheckoutOrderTest extends CommerceBrowserTestBase {
     $this->assertSession()->pageTextContains('Contact information');
     $this->assertSession()->pageTextContains('Billing information');
     $this->assertSession()->pageTextContains('Order Summary');
+    $this->assertSession()->elementsCount('css', '.block-commerce-checkout-progress li.checkout-progress--step > a', 2);
     $this->assertCheckoutProgressStep('Review');
+    // Go back with the breadcrumb.
+    $this->getSession()->getPage()->findLink('Order information')->click();
+    $this->assertSession()->pageTextContains('Order Summary');
+    $this->assertCheckoutProgressStep('Order information');
+    $this->submitForm([
+      'contact_information[email]' => 'guest@example.com',
+      'contact_information[email_confirm]' => 'guest@example.com',
+      'billing_information[profile][address][0][address][given_name]' => $this->randomString(),
+      'billing_information[profile][address][0][address][family_name]' => $this->randomString(),
+      'billing_information[profile][address][0][address][organization]' => $this->randomString(),
+      'billing_information[profile][address][0][address][address_line1]' => $this->randomString(),
+      'billing_information[profile][address][0][address][postal_code]' => '94043',
+      'billing_information[profile][address][0][address][locality]' => 'Mountain View',
+      'billing_information[profile][address][0][address][administrative_area]' => 'CA',
+    ], 'Continue to review');
 
     // Go back and forth.
     $this->getSession()->getPage()->clickLink('Go back');
@@ -214,8 +240,7 @@ class CheckoutOrderTest extends CommerceBrowserTestBase {
     $this->drupalLogout();
     $this->drupalGet($this->product->toUrl()->toString());
     $this->submitForm([], 'Add to cart');
-    $cart_link = $this->getSession()->getPage()->findLink('your cart');
-    $cart_link->click();
+    $this->getSession()->getPage()->findLink('your cart')->click();
     $this->submitForm([], 'Checkout');
     $this->assertSession()->pageTextContains('New Customer');
     $this->submitForm([
@@ -225,13 +250,14 @@ class CheckoutOrderTest extends CommerceBrowserTestBase {
       'login[register][password][pass2]' => 'pass',
     ], 'Create account and continue');
     $this->assertSession()->pageTextContains('Billing information');
+    // Check breadcrumbs are not links. (the default setting)
+    $this->assertSession()->elementNotExists('css', '.block-commerce-checkout-progress li.checkout-progress--step > a');
 
     // Test account validation.
     $this->drupalLogout();
     $this->drupalGet($this->product->toUrl()->toString());
     $this->submitForm([], 'Add to cart');
-    $cart_link = $this->getSession()->getPage()->findLink('your cart');
-    $cart_link->click();
+    $this->getSession()->getPage()->findLink('your cart')->click();
     $this->submitForm([], 'Checkout');
     $this->assertSession()->pageTextContains('New Customer');
 
